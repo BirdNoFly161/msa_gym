@@ -63,7 +63,7 @@ class MultipleSequenceAlignmentEnv(gym.Env):
                 for j in range(i+1, self.n_sequences):
                     pair = tuple(sorted(col[i] + col[j]))
                     if pair in self.blosum62.index:
-                        col_score += self.blosum62.loc[pair]
+                        col_score += self.blosum62.loc[pair]# may not work as blosum62 is a dataframe
 
             reward += col_score
 
