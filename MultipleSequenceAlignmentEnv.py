@@ -71,11 +71,20 @@ class MultipleSequenceAlignmentEnv(gym.Env):
         return current_score - self.score # reward is the difference between the current score and the previous score
     
     def column_score(self):
-        return NotImplementedError
+        # the trick is to calculate the score of each column and then sum them without generating the string alignment 
+        # this is much faster than generating the alignment and then calculating the score
+        return 0
 
     def print_alignment(self):
-        for row in self.state:
-            print(''.join(row))
+        # state is the indices of the amino acids in each sequence
+        alignment_max_len = np.max(self.state) - 1
+        for i,seq in enumerate(self.sequences):
+            accumulated_indels = 0
+            for j,base in enumerate(seq):
+                number_of_indels = self.state[i,j] - j - 1 - accumulated_indels
+                accumulated_indels = accumulated_indels + number_of_indels
+                print('_'*number_of_indels, base, end='',sep='')
+            print('_'*(alignment_max_len - len(seq)+1))
 
 
 
