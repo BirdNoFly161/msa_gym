@@ -1,12 +1,7 @@
 import gymnasium as gym
 import numpy as np
 import pandas as pd
-# this is a very simple environment that only inserts gaps
-# the reward is the sum of the blosum62 scores of all pairs of sequences
-# the observation is a one-hot encoding of the sequences and the gaps
-# the action is the index of the sequence and the position of the gap
-# this not working yet
-# but should be rather efficient when it is
+
 def getblosum62():
     return pd.read_csv('blosum62.csv', index_col=0)
 
@@ -15,14 +10,19 @@ class MultipleSequenceAlignmentEnv(gym.Env):
         super(MultipleSequenceAlignmentEnv, self).__init__()
         self.sequences = sequences
         self.n_sequences = len(sequences)
-        self.max_length = max(len(sequence) for sequence in sequences)
+        self.n_characters = 25 # 20 amino acids + 4 for DNA/RNA + 1 for gap
+        
+        self.max_length = max(len(sequence) for sequence in sequences) + 1 # Add 1 to account for gap insertions
         self.action_space = gym.spaces.MultiDiscrete([self.n_sequences, self.max_length])
-        self.observation_space = gym.spaces.MultiDiscrete([20] * self.n_sequences * self.max_length)
+        self.observation_shape = (self.n_sequences, self.max_length, self.n_characters)
+        self.observation_space = gym.spaces.MultiDiscrete([self.n_characters] * self.n_sequences * self.max_length)
         self.blosum62 = getblosum62()
         self.state = None
 
     def reset(self):
-        self.state = np.zeros((self.n_sequences, self.max_length), dtype=int)
+        self.state = np.full((self.n_sequences, self.max_length), '-', dtype='<U1') # Fill the state with gap symbols
+        for i, seq in enumerate(self.sequences):
+            self.state[i, :len(seq)] = list(seq) # Add the original sequences to the state
         return self._get_observation()
 
     def step(self, action):
@@ -36,24 +36,22 @@ class MultipleSequenceAlignmentEnv(gym.Env):
         return self._get_observation(), reward, done, info
 
     def _get_observation(self):
-        obs = np.zeros((self.n_sequences, self.max_length, 21), dtype=int)
-        for i, seq in enumerate(self.sequences):
-            for j, aa in enumerate(seq):
+        obs = np.zeros(self.observation_shape, dtype=int)
+        for i, row in enumerate(self.state):
+            for j, aa in enumerate(row):
                 obs[i, j, self._aa_to_index(aa)] = 1
-        obs[self.state == 1] = 0
-        obs[self.state == 2] = 1
         return obs.flatten()
 
     def _aa_to_index(self, aa):
         aa = aa.upper()
         if aa == '-':
-            return 0
+            return 20
         else:
-            return ord(aa) - ord('A') + 1
+            return ord(aa) - ord('A')
 
     def _insert_gap(self, seq_idx, pos):
         self.state[seq_idx, pos+1:] = np.roll(self.state[seq_idx, pos+1:], 1)
-        self.state[seq_idx, pos] = 0
+        self.state[seq_idx, pos] = '-'
 
     def _calculate_reward(self):
         reward = 0
@@ -63,19 +61,28 @@ class MultipleSequenceAlignmentEnv(gym.Env):
 
             for i in range(self.n_sequences):
                 for j in range(i+1, self.n_sequences):
-                    pair = tuple(sorted((col[i], col[j])))
-                    col_score += self.blosum62.get(pair, 0)
+                    pair = tuple(sorted(col[i] + col[j]))
+                    if pair in self.blosum62.index:
+                        col_score += self.blosum62.loc[pair]
 
             reward += col_score
 
         return reward
 
+    def print_alignment(self):
+        for row in self.state:
+            print(''.join(row))
+
+
 
 if __name__ == "__main__":
 
 
-    env = MultipleSequenceAlignmentEnv(['ACDEFGHIKLMNPQRSTVWY', 'ACDEFGHIKLMNPQRSTVWY', 'ACDEFGHIKLMNPQRSTVWY'])
+    env = MultipleSequenceAlignmentEnv(['MCRIAGGRGTLLPLLAALLQA',
+                                        'MSFPCKFVASFLLIFNVSSKGA',
+                                        'MPGKMVVILGASNILWIMF'])
     obs = env.reset()
 
     action = env.action_space.sample()
     obs, reward, done, info = env.step(action)
+    env.print_alignment()
