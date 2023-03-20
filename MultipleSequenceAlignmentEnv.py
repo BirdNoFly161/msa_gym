@@ -3,6 +3,14 @@ import numpy as np
 import pandas as pd
 # make numpy matrix print one line
 np.set_printoptions(linewidth=200)
+#TODO gym.spaces.Sequence is alot more suitable for the sequences than gym.spaces.MultiBinary
+# class gym.spaces.Sequence(space: Space, seed: Optional[Union[int, Generator]] = None)
+# This space represent sets of finite-length sequences.
+
+# This space represents the set of tuples of the form 
+#  where the 
+#  belong to some space that is specified during initialization and the integer 
+#  is not fixed
 
 
 def getblosum62():
@@ -79,24 +87,31 @@ class MultipleSequenceAlignmentEnv(gym.Env):
         return 0
     
 
-    def print_alignment(self):
-        #TODO: Fix trailing gaps
-        # state is the indices of the amino acids in each sequence
-        # still needs work
-        alignment_max_len = np.max(self.state) - 1
-        for i,seq in enumerate(self.sequences):
-            accumulated_gaps = 0
-            for j,base in enumerate(seq):
-                number_of_gaps = self.state[i,j] - j - 1 - accumulated_gaps
-                accumulated_gaps = accumulated_gaps + number_of_gaps
-                print('_'*number_of_gaps, base, end='',sep='')
-            print('_'*(alignment_max_len - len(seq)+1))
+    def print_mat_string_alignment(self):
+        # length of the longest aligned sequence
+        max_len = np.max(self.state)
+        # iterate over rows of the matrix
+        for i in range(self.n_sequences):
+            # iterate over columns of the matrix
+            for j in range(max_len):
+                if j < self.state.shape[1] and self.state[i][j] != 0:
+                    # if the current column is within the range of the alignment matrix
+                    # and the current position is not a gap, print the corresponding character
+                    print(self.sequences[i][self.state[i][j]-1], end='')
+                else:
+                    # otherwise, print a gap
+                    print('-', end='')
+            # print a newline after each row
+            print()
+
+
     
     def mat_string_alignment(self):
         # length of the longest aligned sequence
         max_len = np.max(self.state)
         # make a matrix full of gaps
         alignment = np.full([self.n_sequences, max_len], '-')
+        # fill the matrix with the aligned bases in the correct positions
         for i,seq in enumerate(self.sequences):
             for j,base in enumerate(seq):
                 alignment[i, self.state[i,j]-1] = base
@@ -115,5 +130,4 @@ if __name__ == "__main__":
     action = env.action_space.sample()
     print(action)
     obs, reward, done, info = env.step(action)
-    align = env.mat_string_alignment()
-    print(align)
+    env.print_mat_string_alignment()
