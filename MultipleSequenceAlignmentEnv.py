@@ -1,6 +1,9 @@
 import gymnasium as gym
 import numpy as np
 import pandas as pd
+# make numpy matrix print one line
+np.set_printoptions(linewidth=200)
+
 
 def getblosum62():
     return pd.read_csv('blosum62.csv', index_col=0)
@@ -88,6 +91,18 @@ class MultipleSequenceAlignmentEnv(gym.Env):
                 accumulated_gaps = accumulated_gaps + number_of_gaps
                 print('_'*number_of_gaps, base, end='',sep='')
             print('_'*(alignment_max_len - len(seq)+1))
+    
+    def mat_string_alignment(self):
+        # length of the longest aligned sequence
+        max_len = np.max(self.state)
+        # make a matrix full of gaps
+        alignment = np.full([self.n_sequences, max_len], '-')
+        for i,seq in enumerate(self.sequences):
+            for j,base in enumerate(seq):
+                alignment[i, self.state[i,j]-1] = base
+        return alignment
+        
+
 
 
 
@@ -100,4 +115,5 @@ if __name__ == "__main__":
     action = env.action_space.sample()
     print(action)
     obs, reward, done, info = env.step(action)
-    env.print_alignment()
+    align = env.mat_string_alignment()
+    print(align)
