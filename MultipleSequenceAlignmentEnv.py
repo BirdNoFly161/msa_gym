@@ -75,18 +75,6 @@ class MultipleSequenceAlignmentEnv(gym.Env):
         # this is much faster than generating the alignment and then calculating the score
         return 0
     
-    def column_score(self):
-        # calculate the score of each column and sum them
-        column_scores = []
-        for j in range(self.max_length):
-            column_score = 0
-            for i in range(self.n_sequences):
-                for k in range(i+1, self.n_sequences):
-                    char_i = self.sequences[i][j] if j < len(self.sequences[i]) else '-'
-                    char_k = self.sequences[k][j] if j < len(self.sequences[k]) else '-'
-                    column_score += self.weight_matrix.loc[char_i, char_k]
-            column_scores.append(column_score)
-        return sum(column_scores)
 
     def print_alignment(self):
         #TODO: Fix trailing gaps
