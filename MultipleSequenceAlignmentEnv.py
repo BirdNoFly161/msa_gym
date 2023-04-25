@@ -99,15 +99,18 @@ class MultipleSequenceAlignmentEnv(gym.Env):
     
 
     def print_mat_string_alignment(self):
-        max_len = np.max(self.state)
-        for i, seq in enumerate(self.sequences):
-            aligned_seq = ''
-            for j, base in enumerate(seq):
-                if self.state[i, j] > len(aligned_seq):
-                    aligned_seq += '-' * (self.state[i, j] - len(aligned_seq))
-                aligned_seq += base
-            aligned_seq += '-' * (max_len - len(aligned_seq))
-            print(aligned_seq)
+        # max_len = np.max(self.state)
+        # for i, seq in enumerate(self.sequences):
+        #     aligned_seq = ''
+        #     for j, base in enumerate(seq):
+        #         if self.state[i, j] > len(aligned_seq):
+        #             aligned_seq += '-' * (self.state[i, j] - len(aligned_seq))
+        #         aligned_seq += base
+        #     aligned_seq += '-' * (max_len - len(aligned_seq))
+        #     print(aligned_seq)
+        align_mat = self.mat_string_alignment()
+        for i in range(self.n_sequences):
+            print(''.join(align_mat[i,:]))
 
 
 
@@ -129,9 +132,10 @@ class MultipleSequenceAlignmentEnv(gym.Env):
 
 if __name__ == "__main__":
 
-    env = MultipleSequenceAlignmentEnv(['MCRIAGGRGTLLPLLAALLQA',
-                                        'MSFPCKFVASFLLIFNVSSKGA',
-                                        'MPGKMVVILGASNILWIMF'])
+    env = MultipleSequenceAlignmentEnv(['FGKGKC',
+       'FGKFGK',
+       'GKGKC',
+       'KFKC'])
     obs = env.reset()
     for _ in range (15):
         action = env.action_space.sample()
