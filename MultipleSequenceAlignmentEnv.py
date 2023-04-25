@@ -1,16 +1,10 @@
 import gymnasium as gym
 import numpy as np
 import pandas as pd
+from itertools import combinations
+from math import comb
 # make numpy matrix print one line
 np.set_printoptions(linewidth=200)
-#TODO gym.spaces.Sequence is alot more suitable for the sequences than gym.spaces.MultiBinary
-# class gym.spaces.Sequence(space: Space, seed: Optional[Union[int, Generator]] = None)
-# This space represent sets of finite-length sequences.
-
-# This space represents the set of tuples of the form 
-#  where the 
-#  belong to some space that is specified during initialization and the integer 
-#  is not fixed
 
 
 def getblosum62():
@@ -78,13 +72,30 @@ class MultipleSequenceAlignmentEnv(gym.Env):
 
     def _calculate_reward(self):
         current_score = self.column_score()
-        return current_score - self.score # reward is the difference between the current score and the previous score
+        reward = current_score - self.score
+        self.score = current_score
+        return reward # reward is the difference between the current score and the previous score
     
     def column_score(self):
-        # TODO: calculate the score of each column and sum them
         # the trick is to calculate the score of each column and then sum them without generating the string alignment 
         # this is much faster than generating the alignment and then calculating the score
-        return 0
+        max_len = np.max(self.state) # length of the longest aligned sequence
+        score = 0
+        for col in range(1,max_len+1):
+            all_basis_on_column = zip(*np.where(self.state == col))
+            #number_of_indels = self.n_sequences - len(all_basis_on_column[0]) # number of indels in the column
+            for (i,j),(k,l) in combinations(all_basis_on_column, 2):
+                score += self.weight_matrix.loc[self.sequences[i][j], self.sequences[k][l]]
+            # to penalize them, we can add a penalty for each indel in the column
+            # gap_penalty
+            gap_penalty = -4 # this is the gap penalty in blosum62
+            n_non_gaps = len(all_basis_on_column)
+            # (N-m) * m + (N-m)! / (2! * (N-m-2)!) * gap_penalty
+            # where N is self.n_sequences and m is n_non_gaps
+            score += (self.n_sequences - n_non_gaps) * n_non_gaps + comb(self.n_sequences - n_non_gaps, 2) * gap_penalty
+
+        
+        return score
     
 
     def print_mat_string_alignment(self):
@@ -94,7 +105,7 @@ class MultipleSequenceAlignmentEnv(gym.Env):
         for i in range(self.n_sequences):
             # iterate over columns of the matrix
             for j in range(max_len):
-                if j < self.state.shape[1] and self.state[i][j] != 0:
+                if j == self.state[i][j]-1:
                     # if the current column is within the range of the alignment matrix
                     # and the current position is not a gap, print the corresponding character
                     print(self.sequences[i][self.state[i][j]-1], end='')
@@ -127,7 +138,9 @@ if __name__ == "__main__":
                                         'MSFPCKFVASFLLIFNVSSKGA',
                                         'MPGKMVVILGASNILWIMF'])
     obs = env.reset()
-    action = env.action_space.sample()
-    print(action)
-    obs, reward, done, info = env.step(action)
+    for _ in range (15):
+        action = env.action_space.sample()
+        obs, reward, done, info = env.step(action)
+    print(env.state)
     env.print_mat_string_alignment()
+    print(env.mat_string_alignment())

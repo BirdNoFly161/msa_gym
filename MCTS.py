@@ -20,14 +20,10 @@ class Node:
     def is_fully_expanded(self):
         rows, cols = np.where(self.expandable_moves == 1)
         possible_actions = list(zip(rows, cols))
-        return ( (len(possible_actions) == 0) and (len(self.children) > 0) )
+        return not possible_actions and len(self.children) > 0
 
     def get_ucb(self, child):
-        if(child.visit_count == 0):
-            q_value = 0
-        else:
-            q_value = child.value_sum / child.visit_count
-
+        q_value = 0 if child.visit_count == 0 else child.value_sum / child.visit_count
         return q_value + self.args['C']*math.sqrt(math.log(self.visit_count) / child.visit_count)
 
     def select(self):
@@ -53,10 +49,7 @@ class Node:
         child_state = list(self.state).copy()
         sequence, column = action
         distance = 0
-        if( column % 2 == 1):
-            distance = 1
-        else:
-            distance = -1
+        distance = 1 if  column % 2 == 1 else -1
         column = int(column / 2)
         child_state, legally_achieved = self.MSA.get_next_state(child_state, sequence, column, distance )
 
