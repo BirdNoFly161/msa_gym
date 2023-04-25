@@ -82,7 +82,7 @@ class MultipleSequenceAlignmentEnv(gym.Env):
         max_len = np.max(self.state) # length of the longest aligned sequence
         score = 0
         for col in range(1,max_len+1):
-            all_basis_on_column = zip(*np.where(self.state == col))
+            all_basis_on_column = list(zip(*np.where(self.state == col)))
             #number_of_indels = self.n_sequences - len(all_basis_on_column[0]) # number of indels in the column
             for (i,j),(k,l) in combinations(all_basis_on_column, 2):
                 score += self.weight_matrix.loc[self.sequences[i][j], self.sequences[k][l]]
@@ -99,21 +99,16 @@ class MultipleSequenceAlignmentEnv(gym.Env):
     
 
     def print_mat_string_alignment(self):
-        # length of the longest aligned sequence
         max_len = np.max(self.state)
-        # iterate over rows of the matrix
-        for i in range(self.n_sequences):
-            # iterate over columns of the matrix
-            for j in range(max_len):
-                if j == self.state[i][j]-1:
-                    # if the current column is within the range of the alignment matrix
-                    # and the current position is not a gap, print the corresponding character
-                    print(self.sequences[i][self.state[i][j]-1], end='')
-                else:
-                    # otherwise, print a gap
-                    print('-', end='')
-            # print a newline after each row
-            print()
+        for i, seq in enumerate(self.sequences):
+            aligned_seq = ''
+            for j, base in enumerate(seq):
+                if self.state[i, j] > len(aligned_seq):
+                    aligned_seq += '-' * (self.state[i, j] - len(aligned_seq))
+                aligned_seq += base
+            aligned_seq += '-' * (max_len - len(aligned_seq))
+            print(aligned_seq)
+
 
 
     
@@ -141,6 +136,7 @@ if __name__ == "__main__":
     for _ in range (15):
         action = env.action_space.sample()
         obs, reward, done, info = env.step(action)
+        print(action, reward)
     print(env.state)
     env.print_mat_string_alignment()
     print(env.mat_string_alignment())
