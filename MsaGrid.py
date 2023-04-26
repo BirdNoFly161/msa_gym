@@ -21,162 +21,156 @@ class MsaGrid(gym.Env):
 
         self.initial_sequences = list(map(self.sequence_constructor, sequences))
         self.max_length = max(len(sequence) for sequence in self.initial_sequences)
+        self.nbr_sequences = len(self.initial_sequences)
 
-        self.action_size = None
+        padded_sequences = list()
+        for idx, sequence in enumerate(self.initial_sequences):
+
+            if len(sequence) < self.max_length:
+                padded_sequences.append(self.sequence_constructor.concat(
+                    [sequence, self.sequence_constructor('-' * (self.max_length - len(sequence)))])
+                )
+            else:
+                padded_sequences.append((sequence))
+
+        self.initial_padded_sequences = padded_sequences
+
+        self.observation_space = spaces.Dict({
+            'Sequences': spaces.Sequence(
+                spaces.Text(charset=self.sequence_constructor.alphabet, max_length=self.max_length)),
+
+            'Residue_positions': spaces.MultiDiscrete( [self.nbr_sequences, self.max_length] )
+
+        })
+
+        self.action_space = spaces.MultiDiscrete( [self.nbr_sequences, self.max_length] )
+        self.legal_actions_mask = np.ones( (self.nbr_sequences, self.max_length) )
+
+        # mask out illegal move, ie make sure sequences < max_length choose a valid residue
+        for sequence_idx, sequence in enumerate(self.initial_sequences):
+            length_sequence = len(sequence)
+
+            for residue_idx in range(length_sequence, self.max_length, 1):
+                self.legal_actions_mask[sequence_idx, residue_idx] = 0
+
+        # steps per episode
+        steps_current_episode = 0
 
 
     def reset(self):
-        padded_sequences = list()
-        for idx, sequence in enumerate(self.initial_sequences):
-            if len(sequence) < self.max_length:
-                padded_sequences.append( self.sequence_constructor.concat(
-                    [sequence, self.sequence_constructor('-' * (self.max_length - len(sequence)))])
-                )
-        self.grid = [sequence.__str__() for sequence in padded_sequences]
 
-        # for testing purposes only
-        self.grid = ['FGKGKC-',
-       'FGKFGK-',
-       '-GKGKC-',
-       'KFKC---']
+        self.state = {'Sequences': [sequence.__str__() for sequence in self.initial_sequences],
+                      'Residue_positions': np.zeros( (self.nbr_sequences, self.max_length),dtype=np.int64 )
+                      }
 
-        # move this line to init after test
-        shape_grid = (len(self.grid), len(self.grid[0]))
-        self.action_size = (shape_grid[0], shape_grid[1] * 2)
+        for i, sequence in enumerate(self.state['Sequences']):
+            # state is just the indices of each amino acide which is 1,2,3,4...len(sequence)+1 (taken from walids)
+            self.state['Residue_positions'][i, :len(sequence)] = np.arange(1, len(sequence)+1)
+
         return self._get_obs()
 
     def _get_obs(self):
-        return tuple(self.grid)
+        return self.state
 
     # Possibly TODO (return sum of pair score or return entropy of columns, or frequency of collums)
     #def _get_info(self):
 
-    def generate_grid(self,sequences):
-        ...
+    def step(self, action):
+        self.state = self.get_next_state(self.state, action)
+        reward = self.get_value(self.state)
+        self.steps_
+        # set this to end after n steps
+        done = False
 
-    """
-        print(self.sequence_constructor.alphabet)
-        print(self.sequence_constructor.gap_chars)
-        self.observation_space = spaces.Sequence( spaces.Text(charset= self.sequence_constructor.alphabet, max_length=max_length) )
-        print(self.observation_space.sample())
-        print(type(self.observation_space.sample()))
-        return [sequence]
-    """
-    def find_nth_occurrence(self, string, substring, n):
-        start = string.find(substring)
-        while start >= 0 and n > 1:
-            start = string.find(substring, start + len(substring))
-            n -= 1
-        return start
+        return self.state, reward, done
 
-    def slide_grid(self, grid, sequence, residue_position, distance):
-
-        grid = list(grid).copy()
-
-        if distance > 0:
-            direction = 'right'
-        else:
-            distance *= -1
-            direction = 'left'
-
-        if direction == 'right':
-
-            new_sequence = {'left': grid[sequence][:residue_position],
-                            'right': grid[sequence][residue_position:]}
-
-            idx_last_gap = self.find_nth_occurrence(new_sequence['right'], '-', distance)
-            if idx_last_gap > 0:
-                #print(''.join(['-'*distance, 'hello']))
-                new_part = ''.join([ ('-' * distance), new_sequence['right'][:idx_last_gap].replace('-', ''), new_sequence['right'][idx_last_gap+1:]])
-                grid[sequence] = ''.join([new_sequence['left'], new_part])
-                #return(''.join([new_sequence['left'], new_part]))
-
-            else:
-                print('illegal attempt for state: ', grid, sequence, residue_position, distance)
-
-            return grid, True
-
-        else:
-            new_sequence = {'left': grid[sequence][:residue_position+1],
-                            'right': grid[sequence][residue_position+1:]}
-
-            new_sequence['left'] = new_sequence['left'][::-1]
-            #print(new_sequence['left'])
-            idx_last_gap = self.find_nth_occurrence(new_sequence['left'], '-', distance)
-
-            if idx_last_gap > 0:
-                new_part = ''.join([ ('-' * distance), new_sequence['left'][:idx_last_gap].replace('-', ''), new_sequence['left'][idx_last_gap+1:]])
-
-                grid[sequence] = ''.join([new_part[::-1], new_sequence['right'] ])
-                #print(grid)
-                #return(''.join([new_part[::-1], new_sequence['right'] ]))
+    def get_next_state(self, state, action):
+        sequence, column = action
+        new_state = {
+            'Sequences': state['Sequences'].copy(),
+            'Residue_positions': state['Residue_positions'].copy()
+        }
 
 
-            else:
-                print('illegal attempt for state: ', grid, sequence, residue_position, distance)
+        for i in range(column, len(state['Sequences'][sequence]),1):
+            new_state['Residue_positions'][sequence][i] += 1
 
-            return grid, True
-
-
+        return new_state
 
 
-    def get_valid_moves(self, state):
-        shape_state = (len(state), len(state[0]))
-        valid_moves_mask = np.zeros( (shape_state[0], shape_state[1]*2) )
-
-
-        for (i, j), element in np.ndenumerate(valid_moves_mask):
-            # element here is redundant dont need its value just the indices
-
-            residue_idx = int(j / 2)
-            if (state[i][residue_idx] != '-'):
-                new_sequence = {'left': state[i][:residue_idx],
-                        'right': state[i][residue_idx:]}
-
-                if new_sequence['left'].find('-')!=-1:
-                    valid_moves_mask[i][residue_idx*2]=1
-
-                if new_sequence['right'].find('-')!=-1:
-                    valid_moves_mask[i][(residue_idx*2)+1]=1
-
-
-        return valid_moves_mask
-
-    #wrapper for my slide grid fuction, to conform to existing projects
-    def get_next_state(self, state, sequence, column, distance):
-        return self.slide_grid(state, sequence, column, distance)
-
-    def compute_score_pairwise_alignment(self, seq1, seq2, score_matrix_dict):
-        score = 0
-        for residue_pair in list(zip(seq1, seq2)):
-            residue1 = residue_pair[0].__str__()
-            residue2 = residue_pair[1].__str__()
-
-            # blosum matrices in the blosum modules read gaps as '*' instead of '-'
-            if (residue1 == '-'):
-                residue1 = '*'
-
-            if (residue2 == '-'):
-                residue2 = '*'
-
-            if (residue1 == '*' and residue2 == '*'):
-                score -= 1
-            else:
-                # add cost of substuting residue 1 with 2
-                score += score_matrix_dict[residue1 + residue2]
-        return score
-
-    def sum_pairs_score(self,msa, scoringMatrix):
+    def sum_pairs_score(self,state, scoringMatrix):
+        # TODO refactor
         score = 0
         # get number of blossum matrix
         match = re.search("blossum(.*)", scoringMatrix).group(1)
         score_matrix_dict = bl.BLOSUM(int(match))
-        pairwise_combinations = itertools.combinations(msa, 2)
+        pairwise_combinations = itertools.combinations(np.arange(0, self.nbr_sequences), 2)
 
         for pair in pairwise_combinations:
-            score += self.compute_score_pairwise_alignment(pair[0], pair[1], score_matrix_dict)
+            sequence_1, sequence_2 = pair
+            for column in range(1, self.max_length+1, 1):
+
+                residue_1 = '-'
+                residue_2 = '-'
+
+                array = np.where(state['Residue_positions'][sequence_1] == column )[0]
+                if len(array) > 0:
+                    index = array[0]
+                    residue_1 = state['Sequences'][sequence_1][index]
+
+                array = np.where( state['Residue_positions'][sequence_2] == column )[0]
+                if len(array) > 0:
+                    index = array[0]
+                    residue_2 = state['Sequences'][sequence_2][index]
+
+                if residue_1 == '-' or residue_2 == '-':
+                    score -= 1
+                else:
+                    score += score_matrix_dict[residue_1 + residue_2]
 
         return score
 
     def get_value(self, state):
         return self.sum_pairs_score(state, 'blossum50')
+
+    def get_alignment(self, state):
+        sequences = state['Sequences'].copy()
+        new_sequences = []
+
+        max_len = np.max(state['Residue_positions'])
+        # make a matrix full of gaps
+        alignment = np.full([self.nbr_sequences, max_len], '-')
+
+        for i, seq in enumerate(sequences):
+            for j, base in enumerate(seq):
+                alignment[i, state['Residue_positions'][i, j] - 1] = base
+        return alignment
+
+    def one_hot_encode(self, state):
+
+        new_state = {
+            'Sequences': self.initial_padded_sequences.copy(),
+            'Residue_positions': state['Residue_positions'].copy()
+        }
+
+
+        alphabet = self.sequence_constructor.alphabet
+
+        for idx, sequence in enumerate(new_state['Sequences']):
+
+            vector = np.array([[0 if char != letter else 1 for char in alphabet]
+                  for letter in sequence])
+            new_state['Sequences'][idx] = vector
+
+        return new_state
+    def get_encoded_state(self, state):
+        onehot_encoded = self.one_hot_encode(state)
+        onehot_encoded['Sequences'] = np.array(onehot_encoded['Sequences'])
+        onehot_encoded['Residue_positions'] = np.expand_dims(onehot_encoded['Residue_positions'], axis=-1)
+
+        #print(onehot_encoded['Sequences'].shape,onehot_encoded['Residue_positions'].shape)
+
+        encoded_state = np.stack( onehot_encoded['Sequences'])
+        encoded_state = np.array(encoded_state,dtype=np.float32)
+
+        return encoded_state
