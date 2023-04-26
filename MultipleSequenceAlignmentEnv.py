@@ -25,19 +25,21 @@ class MultipleSequenceAlignmentEnv(gym.Env):
         self.n_sequences = len(sequences)
         self.n_characters = len(self.alphabet) 
         self.max_length = max(len(sequence) for sequence in sequences)
-        self.action_space = gym.spaces.MultiDiscrete([self.n_sequences, self.max_length])
-        self.observation_space = gym.spaces.Dict({
-            'one_hot_sequences' : gym.spaces.MultiBinary([self.n_sequences, self.max_length, self.n_characters]),
-            'positions' : gym.spaces.MultiDiscrete([self.n_sequences, self.max_length]),
-            # profile could be a good idea for the model to know the distribution of amino acids in each position 
-            #'profile' : gym.spaces.MultiBinary([self.max_length, self.n_characters])
-        })
+        self.action_space = gym.spaces.Box(low=np.array([0,0]), high=np.array([self.n_sequences-1, self.max_length-1]), dtype=np.uint16)
+        self.n_actions = self.n_sequences * self.max_length
+        # action space self.n_sequences, self.max_length, self.n_characters+1, which is self.one_hot_sequences concatenated with self.state which is equivlent to
+        # an image of size self.n_sequences, self.max_length, self.n_characters+1
+        low = np.zeros([self.n_sequences, self.max_length, self.n_characters+1], dtype=np.uint16)
+        high = np.ones([self.n_sequences, self.max_length, self.n_characters+1], dtype=np.uint16)
+        # the last channel is for the position which is an integer
+        high[:,:,-1] = self.max_length * 5 # the amount of gaps is limited to 4 times the length of the longest sequence
+        self.observation_space = gym.spaces.Box(low=low, high=high, dtype=np.uint16)
         
         
 
     def reset(self):
-        self.state = np.zeros([self.n_sequences, self.max_length], dtype=np.int_) # watch out for overflow
-        self.one_hot_sequences = np.zeros([self.n_sequences, self.max_length, self.n_characters], dtype=np.int8) # too big for binary
+        self.state = np.zeros([self.n_sequences, self.max_length], dtype=np.uint16) # watch out for overflow
+        self.one_hot_sequences = np.zeros([self.n_sequences, self.max_length, self.n_characters], dtype=np.uint16) # too big for binary
         for i, sequence in enumerate(self.sequences):
             # one hot encoding of the sequences
             self.one_hot_sequences[i, :len(sequence), :] = np.array([self.onehot[self.onehot_transform[letter]] for letter in sequence])
@@ -49,7 +51,7 @@ class MultipleSequenceAlignmentEnv(gym.Env):
 
 
     def step(self, action):
-        seq_idx, pos = action
+        seq_idx, pos = divmod(action, self.max_length)
         self._insert_gap(seq_idx, pos)
         reward = self._calculate_reward()
         self.score += reward
@@ -59,11 +61,8 @@ class MultipleSequenceAlignmentEnv(gym.Env):
         return self._get_observation(), reward, done, info
 
     def _get_observation(self):
-        return {
-            'one_hot_sequences' : self.one_hot_sequences,
-            'positions' : self.state,
-            #'profile' : self.profile
-        }
+        stacked_array = np.concatenate((self.one_hot_sequences, np.expand_dims(self.state, axis=-1)), axis=-1)
+        return stacked_array
 
 
     def _insert_gap(self, seq_idx, pos):
