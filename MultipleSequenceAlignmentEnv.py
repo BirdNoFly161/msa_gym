@@ -124,6 +124,10 @@ class MultipleSequenceAlignmentEnv(gym.Env):
             for j,base in enumerate(seq):
                 alignment[i, self.state[i,j]-1] = base
         return alignment
+    
+    def render(self, mode='human'):
+        print(self.mat_string_alignment())
+        print(self.score)
         
 
 

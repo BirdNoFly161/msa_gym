@@ -25,13 +25,13 @@ print(model.summary())
 
 agent = CEMAgent(
     model=model,
-    memory=SequentialMemory(limit=50000, window_length=1),
+    memory=SequentialMemory(limit=5000, window_length=1),
     nb_actions=actions,
     nb_steps_warmup=10,
 )
 
 agent.compile()
-agent.fit(env, nb_steps=50000, visualize=False, verbose=1)
+agent.fit(env, nb_steps=5000, visualize=False, verbose=1)
 results = agent.test(env, nb_episodes=5, visualize=True)
 print(results.history['episode_reward'])
                  
