@@ -4,6 +4,7 @@ from Model import ResNet
 from MCTS import MCTS
 import numpy as np
 from torchsummary import summary
+from AlphaZero import AlphaZero
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
@@ -15,17 +16,27 @@ if __name__ == '__main__':
     print('Alignment at start: ', msaGrid.get_alignment(state))
 
     model = ResNet(msaGrid, 1, 64)
-    summary(model, (4, 6, 29))
+    summary(model, (4, 6, 30))
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
     args = {
-        'C': 20,
-        'num_searches': 1000
+        'C': 2,
+        'num_searches': 50,
+        'num_iterations': 5,
+        'num_selfPlay_iterations': 100,
+        'num_epochs': 2,
+        'batch_size': 30
     }
-    
-    model = ResNet(msaGrid, 1, 64)
-    
-    mcts = MCTS(msaGrid, args, model)
 
+    alphaZero = AlphaZero(model, optimizer, msaGrid, args)
+    alphaZero.learn()
+
+    memory = alphaZero.selfPlay()
+    print(memory[-1])
+
+
+    """
     steps = 100
     
     while steps > 0:
@@ -58,3 +69,7 @@ if __name__ == '__main__':
     policy = torch.softmax(policy, axis=1).squeeze(0).detach().cpu().numpy()
 
     print(value, policy)
+        
+        
+    """
+

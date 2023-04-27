@@ -84,8 +84,6 @@ class MCTS:
 
         for search in range(self.args['num_searches']):
 
-            if(search % 100 ==0):
-                print(search)
             node = root
             #breakpoint
             brp=0

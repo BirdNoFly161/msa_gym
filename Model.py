@@ -32,7 +32,7 @@ class ResNet(nn.Module):
             nn.Flatten(),
             # shady input size to checK
             #nn.Linear(32 * MSA.nbr_sequences * MSA.max_length, MSA.nbr_sequences * MSA.max_length)
-            nn.Linear(32 * MSA.max_length * len(MSA.sequence_constructor.alphabet), MSA.nbr_sequences * MSA.max_length)
+            nn.Linear(32 * MSA.max_length * (len(MSA.sequence_constructor.alphabet) +1 ), MSA.nbr_sequences * MSA.max_length)
         )
 
         self.valueHead = nn.Sequential(
@@ -43,7 +43,7 @@ class ResNet(nn.Module):
 
             # shady input size to checK
             #nn.Linear(2 * MSA.nbr_sequences * MSA.max_length, 1),
-            nn.Linear(3 * MSA.max_length * len(MSA.sequence_constructor.alphabet), 1),
+            nn.Linear(3 * MSA.max_length * (len(MSA.sequence_constructor.alphabet) +1 ), 1),
             nn.Tanh()
         )
 

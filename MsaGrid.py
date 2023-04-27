@@ -153,6 +153,9 @@ class MsaGrid(gym.Env):
             'Residue_positions': state['Residue_positions'].copy()
         }
 
+        for idx, sequence in enumerate(new_state['Sequences']):
+            new_state['Sequences'][idx] = sequence.__str__()
+
 
         alphabet = self.sequence_constructor.alphabet
 
@@ -163,14 +166,15 @@ class MsaGrid(gym.Env):
             new_state['Sequences'][idx] = vector
 
         return new_state
+
+
     def get_encoded_state(self, state):
         onehot_encoded = self.one_hot_encode(state)
         onehot_encoded['Sequences'] = np.array(onehot_encoded['Sequences'])
         onehot_encoded['Residue_positions'] = np.expand_dims(onehot_encoded['Residue_positions'], axis=-1)
 
-        #print(onehot_encoded['Sequences'].shape,onehot_encoded['Residue_positions'].shape)
 
-        encoded_state = np.stack( onehot_encoded['Sequences'])
+        encoded_state = np.concatenate( (onehot_encoded['Sequences'], onehot_encoded['Residue_positions']), axis = 2    )
         encoded_state = np.array(encoded_state,dtype=np.float32)
 
         return encoded_state
