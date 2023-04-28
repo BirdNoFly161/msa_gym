@@ -20,7 +20,6 @@ class AlphaZero:
 
         while steps > 0:
             action_probs = self.mcts.search(state)
-
             action = np.random.choice(self.MSA.nbr_sequences * self.MSA.max_length, p=action_probs)
             action = np.unravel_index(action, (self.MSA.nbr_sequences, self.MSA.max_length))
             state = self.MSA.get_next_state(state, action)
@@ -72,7 +71,6 @@ class AlphaZero:
 
             self.model.eval()
             for selfPlay_iteration in tqdm(range(self.args['num_selfPlay_iterations'])):
-                print('self play iteration :', selfPlay_iteration)
                 memory += self.selfPlay()
 
             self.model.train()
@@ -83,3 +81,7 @@ class AlphaZero:
 
             torch.save(self.model.state_dict(), f"model_{iteration}.pt")
             torch.save(self.optimizer.state_dict(), f"optimizer_{iteration}.pt")
+            memory = self.selfPlay()
+            for state in memory:
+                print(self.MSA.get_alignment(state[0]))
+                print(self.MSA.get_value(state[0]))

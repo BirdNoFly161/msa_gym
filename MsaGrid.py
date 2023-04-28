@@ -105,10 +105,11 @@ class MsaGrid(gym.Env):
         match = re.search("blossum(.*)", scoringMatrix).group(1)
         score_matrix_dict = bl.BLOSUM(int(match))
         pairwise_combinations = itertools.combinations(np.arange(0, self.nbr_sequences), 2)
+        max_length = max(max(sequence) for sequence in state['Residue_positions'])
 
         for pair in pairwise_combinations:
             sequence_1, sequence_2 = pair
-            for column in range(1, self.max_length+1, 1):
+            for column in range(1, max_length+1, 1):
 
                 residue_1 = '-'
                 residue_2 = '-'

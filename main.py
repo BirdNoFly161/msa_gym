@@ -16,16 +16,19 @@ if __name__ == '__main__':
     print('Alignment at start: ', msaGrid.get_alignment(state))
 
     model = ResNet(msaGrid, 1, 64)
+    #model.load_state_dict(torch.load('model_19.pt'))
+    model.eval()
     summary(model, (4, 6, 30))
 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    #optimizer.load_state_dict(torch.load('optimizer_19.pt'))
 
     args = {
         'C': 2,
-        'num_searches': 50,
+        'num_searches': 200,
         'num_iterations': 5,
         'num_selfPlay_iterations': 100,
-        'num_epochs': 2,
+        'num_epochs': 40,
         'batch_size': 30
     }
 
@@ -33,7 +36,11 @@ if __name__ == '__main__':
     alphaZero.learn()
 
     memory = alphaZero.selfPlay()
-    print(memory[-1])
+
+    for state in memory:
+        print(state[0])
+        print(msaGrid.get_alignment(state[0]))
+        print(msaGrid.get_value(state[0]))
 
 
     """
