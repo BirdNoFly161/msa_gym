@@ -1,10 +1,16 @@
 import gymnasium as gym
 import numpy as np
 import pandas as pd
-from itertools import combinations
-from math import comb
 # make numpy matrix print one line
 np.set_printoptions(linewidth=200)
+#TODO gym.spaces.Sequence is alot more suitable for the sequences than gym.spaces.MultiBinary
+# class gym.spaces.Sequence(space: Space, seed: Optional[Union[int, Generator]] = None)
+# This space represent sets of finite-length sequences.
+
+# This space represents the set of tuples of the form 
+#  where the 
+#  belong to some space that is specified during initialization and the integer 
+#  is not fixed
 
 
 def getblosum62():
@@ -25,21 +31,19 @@ class MultipleSequenceAlignmentEnv(gym.Env):
         self.n_sequences = len(sequences)
         self.n_characters = len(self.alphabet) 
         self.max_length = max(len(sequence) for sequence in sequences)
-        self.action_space = gym.spaces.Box(low=np.array([0,0]), high=np.array([self.n_sequences-1, self.max_length-1]), dtype=np.uint16)
-        self.n_actions = self.n_sequences * self.max_length
-        # action space self.n_sequences, self.max_length, self.n_characters+1, which is self.one_hot_sequences concatenated with self.state which is equivlent to
-        # an image of size self.n_sequences, self.max_length, self.n_characters+1
-        low = np.zeros([self.n_sequences, self.max_length, self.n_characters+1], dtype=np.uint16)
-        high = np.ones([self.n_sequences, self.max_length, self.n_characters+1], dtype=np.uint16)
-        # the last channel is for the position which is an integer
-        high[:,:,-1] = self.max_length * 5 # the amount of gaps is limited to 4 times the length of the longest sequence
-        self.observation_space = gym.spaces.Box(low=low, high=high, dtype=np.uint16)
+        self.action_space = gym.spaces.MultiDiscrete([self.n_sequences, self.max_length])
+        self.observation_space = gym.spaces.Dict({
+            'one_hot_sequences' : gym.spaces.MultiBinary([self.n_sequences, self.max_length, self.n_characters]),
+            'positions' : gym.spaces.MultiDiscrete([self.n_sequences, self.max_length]),
+            # profile could be a good idea for the model to know the distribution of amino acids in each position 
+            #'profile' : gym.spaces.MultiBinary([self.max_length, self.n_characters])
+        })
         
         
 
     def reset(self):
-        self.state = np.zeros([self.n_sequences, self.max_length], dtype=np.uint16) # watch out for overflow
-        self.one_hot_sequences = np.zeros([self.n_sequences, self.max_length, self.n_characters], dtype=np.uint16) # too big for binary
+        self.state = np.zeros([self.n_sequences, self.max_length], dtype=np.int_) # watch out for overflow
+        self.one_hot_sequences = np.zeros([self.n_sequences, self.max_length, self.n_characters], dtype=np.int8) # too big for binary
         for i, sequence in enumerate(self.sequences):
             # one hot encoding of the sequences
             self.one_hot_sequences[i, :len(sequence), :] = np.array([self.onehot[self.onehot_transform[letter]] for letter in sequence])
@@ -51,7 +55,7 @@ class MultipleSequenceAlignmentEnv(gym.Env):
 
 
     def step(self, action):
-        seq_idx, pos = divmod(action, self.max_length)
+        seq_idx, pos = action
         self._insert_gap(seq_idx, pos)
         reward = self._calculate_reward()
         self.score += reward
@@ -61,8 +65,11 @@ class MultipleSequenceAlignmentEnv(gym.Env):
         return self._get_observation(), reward, done, info
 
     def _get_observation(self):
-        stacked_array = np.concatenate((self.one_hot_sequences, np.expand_dims(self.state, axis=-1)), axis=-1)
-        return stacked_array
+        return {
+            'one_hot_sequences' : self.one_hot_sequences,
+            'positions' : self.state,
+            #'profile' : self.profile
+        }
 
 
     def _insert_gap(self, seq_idx, pos):
@@ -71,46 +78,31 @@ class MultipleSequenceAlignmentEnv(gym.Env):
 
     def _calculate_reward(self):
         current_score = self.column_score()
-        reward = current_score - self.score
-        self.score = current_score
-        return reward # reward is the difference between the current score and the previous score
+        return current_score - self.score # reward is the difference between the current score and the previous score
     
     def column_score(self):
+        # TODO: calculate the score of each column and sum them
         # the trick is to calculate the score of each column and then sum them without generating the string alignment 
         # this is much faster than generating the alignment and then calculating the score
-        max_len = np.max(self.state) # length of the longest aligned sequence
-        score = 0
-        for col in range(1,max_len+1):
-            all_basis_on_column = list(zip(*np.where(self.state == col)))
-            #number_of_indels = self.n_sequences - len(all_basis_on_column[0]) # number of indels in the column
-            for (i,j),(k,l) in combinations(all_basis_on_column, 2):
-                score += self.weight_matrix.loc[self.sequences[i][j], self.sequences[k][l]]
-            # to penalize them, we can add a penalty for each indel in the column
-            # gap_penalty
-            gap_penalty = -4 # this is the gap penalty in blosum62
-            n_non_gaps = len(all_basis_on_column)
-            # (N-m) * m + (N-m)! / (2! * (N-m-2)!) * gap_penalty
-            # where N is self.n_sequences and m is n_non_gaps
-            score += (self.n_sequences - n_non_gaps) * n_non_gaps + comb(self.n_sequences - n_non_gaps, 2) * gap_penalty
-
-        
-        return score
+        return 0
     
 
     def print_mat_string_alignment(self):
-        # max_len = np.max(self.state)
-        # for i, seq in enumerate(self.sequences):
-        #     aligned_seq = ''
-        #     for j, base in enumerate(seq):
-        #         if self.state[i, j] > len(aligned_seq):
-        #             aligned_seq += '-' * (self.state[i, j] - len(aligned_seq))
-        #         aligned_seq += base
-        #     aligned_seq += '-' * (max_len - len(aligned_seq))
-        #     print(aligned_seq)
-        align_mat = self.mat_string_alignment()
+        # length of the longest aligned sequence
+        max_len = np.max(self.state)
+        # iterate over rows of the matrix
         for i in range(self.n_sequences):
-            print(''.join(align_mat[i,:]))
-
+            # iterate over columns of the matrix
+            for j in range(max_len):
+                if j < self.state.shape[1] and self.state[i][j] != 0:
+                    # if the current column is within the range of the alignment matrix
+                    # and the current position is not a gap, print the corresponding character
+                    print(self.sequences[i][self.state[i][j]-1], end='')
+                else:
+                    # otherwise, print a gap
+                    print('-', end='')
+            # print a newline after each row
+            print()
 
 
     
@@ -124,10 +116,6 @@ class MultipleSequenceAlignmentEnv(gym.Env):
             for j,base in enumerate(seq):
                 alignment[i, self.state[i,j]-1] = base
         return alignment
-    
-    def render(self, mode='human'):
-        print(self.mat_string_alignment())
-        print(self.score)
         
 
 
@@ -135,15 +123,11 @@ class MultipleSequenceAlignmentEnv(gym.Env):
 
 if __name__ == "__main__":
 
-    env = MultipleSequenceAlignmentEnv(['FGKGKC',
-       'FGKFGK',
-       'GKGKC',
-       'KFKC'])
+    env = MultipleSequenceAlignmentEnv(['MCRIAGGRGTLLPLLAALLQA',
+                                        'MSFPCKFVASFLLIFNVSSKGA',
+                                        'MPGKMVVILGASNILWIMF'])
     obs = env.reset()
-    for _ in range (15):
-        action = env.action_space.sample()
-        obs, reward, done, info = env.step(action)
-        print(action, reward)
-    print(env.state)
+    action = env.action_space.sample()
+    print(action)
+    obs, reward, done, info = env.step(action)
     env.print_mat_string_alignment()
-    print(env.mat_string_alignment())
