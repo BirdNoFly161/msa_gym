@@ -23,9 +23,8 @@ class MsaGrid(gym.Env):
         self.max_length = max(len(sequence) for sequence in self.initial_sequences)
         self.nbr_sequences = len(self.initial_sequences)
 
-        padded_sequences = list()
-        for idx, sequence in enumerate(self.initial_sequences):
-
+        padded_sequences = []
+        for sequence in self.initial_sequences:
             if len(sequence) < self.max_length:
                 padded_sequences.append(self.sequence_constructor.concat(
                     [sequence, self.sequence_constructor('-' * (self.max_length - len(sequence)))])
@@ -92,7 +91,7 @@ class MsaGrid(gym.Env):
         }
 
 
-        for i in range(column, len(state['Sequences'][sequence]),1):
+        for i in range(column, len(state['Sequences'][sequence])):
             new_state['Residue_positions'][sequence][i] += 1
 
         return new_state
