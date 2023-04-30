@@ -7,15 +7,16 @@ print(torch.__version__)
 
 import torch.nn as nn
 import torch.nn.functional as F
-
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class ResNet(nn.Module):
-    def __init__(self, MSA, num_resBlocks, num_hidden):
+    def __init__(self, MSA, num_resBlocks, num_hidden, device):
         super().__init__()
+        self.device = device
         self.startBlock = nn.Sequential(
 
-            # we give it two arrays one for the sequences and one for the gap positions so we set the 3 from vid to 2
-            nn.Conv2d(2, num_hidden, kernel_size=3, padding=1),
+            #input channels should be = self.MSA.nbr_sequences
+            nn.Conv2d(4, num_hidden, kernel_size=3, padding=1),
             nn.BatchNorm2d(num_hidden),
             # might need to remove this check vid @ 1:45:48
             nn.ReLU()
@@ -31,7 +32,8 @@ class ResNet(nn.Module):
             nn.ReLU(),
             nn.Flatten(),
             # shady input size to checK
-            nn.Linear(32 * MSA.nbr_sequences * MSA.max_length, MSA.nbr_sequences * MSA.max_length)
+            #nn.Linear(32 * MSA.nbr_sequences * MSA.max_length, MSA.nbr_sequences * MSA.max_length)
+            nn.Linear(32 * MSA.max_length * (len(MSA.sequence_constructor.alphabet) +1 ), MSA.nbr_sequences * MSA.max_length)
         )
 
         self.valueHead = nn.Sequential(
@@ -41,9 +43,12 @@ class ResNet(nn.Module):
             nn.Flatten(),
 
             # shady input size to checK
-            nn.Linear(2 * MSA.nbr_sequences * MSA.max_length, 1),
-            nn.Tanh()
+            #nn.Linear(2 * MSA.nbr_sequences * MSA.max_length, 1),
+            nn.Linear(3 * MSA.max_length * (len(MSA.sequence_constructor.alphabet) +1 ), 1),
+            #nn.PReLU()
         )
+
+        self.to(device)
 
     def forward(self, x):
         x = self.startBlock(x)

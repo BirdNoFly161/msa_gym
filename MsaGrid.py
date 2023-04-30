@@ -99,13 +99,13 @@ class MsaGrid(gym.Env):
 
 
     def sum_pairs_score(self,state, scoringMatrix):
-        max_length = max(max(sequence) for sequence in state['Residue_positions'])
         # TODO refactor
         score = 0
         # get number of blossum matrix
         match = re.search("blossum(.*)", scoringMatrix).group(1)
         score_matrix_dict = bl.BLOSUM(int(match))
         pairwise_combinations = itertools.combinations(np.arange(0, self.nbr_sequences), 2)
+        max_length = max(max(sequence) for sequence in state['Residue_positions'])
 
         for pair in pairwise_combinations:
             sequence_1, sequence_2 = pair
@@ -146,3 +146,36 @@ class MsaGrid(gym.Env):
             for j, base in enumerate(seq):
                 alignment[i, state['Residue_positions'][i, j] - 1] = base
         return alignment
+
+    def one_hot_encode(self, state):
+
+        new_state = {
+            'Sequences': self.initial_padded_sequences.copy(),
+            'Residue_positions': state['Residue_positions'].copy()
+        }
+
+        for idx, sequence in enumerate(new_state['Sequences']):
+            new_state['Sequences'][idx] = sequence.__str__()
+
+
+        alphabet = self.sequence_constructor.alphabet
+
+        for idx, sequence in enumerate(new_state['Sequences']):
+
+            vector = np.array([[0 if char != letter else 1 for char in alphabet]
+                  for letter in sequence])
+            new_state['Sequences'][idx] = vector
+
+        return new_state
+
+
+    def get_encoded_state(self, state):
+        onehot_encoded = self.one_hot_encode(state)
+        onehot_encoded['Sequences'] = np.array(onehot_encoded['Sequences'])
+        onehot_encoded['Residue_positions'] = np.expand_dims(onehot_encoded['Residue_positions'], axis=-1)
+
+
+        encoded_state = np.concatenate( (onehot_encoded['Sequences'], onehot_encoded['Residue_positions']), axis = 2    )
+        encoded_state = np.array(encoded_state,dtype=np.float32)
+
+        return encoded_state

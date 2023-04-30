@@ -1,7 +1,8 @@
 import numpy as np
 import math
+import torch
 class Node:
-    def __init__(self, MSA, args, state, parent=None, action_taken=None):
+    def __init__(self, MSA, args, state, parent=None, action_taken=None, prior= None):
         self.MSA = MSA
         self.args = args
         self.state = state
@@ -41,20 +42,17 @@ class Node:
 
         return best_child
 
-    def expand(self):
+    def expand(self, policy):
 
         rows, cols = np.where(self.expandable_moves == 1)
         possible_actions = list(zip(rows, cols))
-        #print(possible_actions)
-        #print(self.children)
-        #print(self.is_fully_expanded())
         action = possible_actions[ np.random.choice( len(possible_actions )) ]
-        self.expandable_moves[action] = 0  
+        self.expandable_moves[action] = 0
 
 
         child_state = self.MSA.get_next_state(self.state, action)
 
-        child = Node(MSA=self.MSA, args=self.args, state=child_state,parent = self, action_taken=action)
+        child = Node(MSA=self.MSA, args=self.args, state=child_state,parent = self, action_taken=action, prior= policy[action])
         self.children.append(child)
 
         return child
@@ -99,10 +97,12 @@ class Node:
 
 
 class MCTS:
-    def __init__(self, MSA, args):
+    def __init__(self, MSA, args, model):
         self.MSA = MSA
         self.args = args
+        self.model=model
 
+    @torch.no_grad()
     def search(self, state):
         root = Node(self.MSA, self.args, state)
 
@@ -117,7 +117,18 @@ class MCTS:
                 node = node.select()
 
 
-            node = node.expand()
+            encoded_state = self.MSA.get_encoded_state(state)
+            tensor_state = torch.tensor(encoded_state, device = self.model.device).unsqueeze(0)
+
+            policy, value = self.model(tensor_state)
+
+            policy = torch.softmax(policy, axis= 1).squeeze(0).cpu()
+            policy = policy.reshape(self.MSA.nbr_sequences, self.MSA.max_length)
+
+            policy *= self.MSA.legal_actions_mask
+            policy /= torch.sum(policy)
+
+            node = node.expand(policy * 0.00001)
             value = node.simulate()
             node.backpropagate(value)
 
@@ -127,5 +138,6 @@ class MCTS:
             action_probs[child.action_taken] = child.visit_count
 
         action_probs /= np.sum(action_probs)
+        action_probs = action_probs.flatten()
         return action_probs
 
